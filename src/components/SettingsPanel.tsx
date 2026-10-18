@@ -8,18 +8,21 @@ import {
   Smartphone,
   Square,
   RectangleVertical,
-  AlertTriangle
+  AlertTriangle,
+  X
 } from 'lucide-react';
 import { VideoSettings } from '../types/contract';
 
 interface SettingsPanelProps {
   settings: VideoSettings;
   onChange: (newSettings: VideoSettings) => void;
+  onClose?: () => void;
 }
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   settings,
   onChange,
+  onClose,
 }) => {
   // Update aspect ratio and recalculate width & height based on preset
   const handleAspectRatioChange = (aspect: VideoSettings['aspectRatio']) => {
@@ -110,13 +113,23 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   };
 
   return (
-    <div className="w-80 h-full bg-studio-surface border-l border-studio-border flex flex-col overflow-y-auto select-none">
+    <div className="w-80 h-full glass-panel border-l border-studio-border/70 flex flex-col overflow-y-auto select-none shadow-xl">
       {/* Header */}
-      <div className="h-12 border-b border-studio-border px-5 flex items-center space-x-2 bg-studio-surface">
-        <Sliders className="w-4 h-4 text-studio-primary" />
-        <span className="text-xs font-semibold uppercase tracking-wider text-studio-text">
-          Video & Render Settings
-        </span>
+      <div className="h-14 border-b border-studio-border/70 px-5 flex items-center justify-between glass-panel-subtle">
+        <div className="flex items-center space-x-2">
+          <Sliders className="w-4 h-4 text-studio-primary" />
+          <span className="text-xs font-bold uppercase tracking-wider text-studio-text">
+            Tetapan Video
+          </span>
+        </div>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="p-1 rounded-lg text-studio-text-muted hover:text-studio-text hover:bg-studio-surface-soft transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       <div className="p-5 space-y-6 flex-1 text-xs">

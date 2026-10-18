@@ -107,6 +107,126 @@ export function validateMotioCode(rawCode: string): ValidationResult {
 }
 
 /**
+ * Automatically repairs and adapts any problematic or broken Motio TSX code:
+ * - Strips all markdown fences and surrounding commentary
+ * - Injects missing React & Remotion imports
+ * - Maps component to required 'export const MotionGraphic'
+ * - Neutralizes forbidden/unsupported modules
+ */
+export function autoFixMotioCode(rawCode: string): {
+  fixedCode: string;
+  changes: string[];
+  success: boolean;
+} {
+  const changes: string[] = [];
+  let code = cleanMotioCode(rawCode);
+
+  if (!code) {
+    return {
+      fixedCode: rawCode,
+      changes: ['Code was completely empty; unable to auto-fix.'],
+      success: false,
+    };
+  }
+
+  changes.push('Cleaned markdown fences and formatted source code');
+
+  // 1. Remove dangerous or non-web calls
+  if (/require\s*\(\s*['"`](?:child_process|fs|path|os|net|http|https)['"`]\s*\)/.test(code)) {
+    code = code.replace(/const\s+\w+\s*=\s*require\s*\(\s*['"`](?:child_process|fs|path|os|net|http|https)['"`]\s*\);?/g, '// [Auto-fixed: Removed Node.js module]');
+    changes.push('Neutralized unauthorized Node.js system modules');
+  }
+
+  if (/\beval\s*\(/.test(code)) {
+    code = code.replace(/\beval\s*\((.*?)\)/g, '/* [Auto-fixed: eval neutralized] */ undefined');
+    changes.push('Neutralized dangerous eval() execution');
+  }
+
+  // 2. Normalize and inject React import if missing
+  if (!code.includes("from 'react'") && !code.includes('from "react"')) {
+    code = `import React from 'react';\n` + code;
+    changes.push("Injected missing 'import React from react'");
+  }
+
+  // 3. Scan for Remotion hooks and utilities used in code
+  const remotionKeywords = [
+    'AbsoluteFill',
+    'useCurrentFrame',
+    'useVideoConfig',
+    'spring',
+    'interpolate',
+    'interpolateColors',
+    'Sequence',
+    'Series',
+    'Loop',
+    'Easing',
+    'Img',
+    'Audio',
+    'random',
+  ];
+
+  const foundKeywords = remotionKeywords.filter((kw) => new RegExp(`\\b${kw}\\b`).test(code));
+  if (foundKeywords.length === 0) {
+    foundKeywords.push('AbsoluteFill', 'useCurrentFrame', 'useVideoConfig', 'spring', 'interpolate', 'Sequence');
+  }
+
+  if (!code.includes("from 'remotion'") && !code.includes('from "remotion"')) {
+    const importStatement = `import {\n  ${foundKeywords.join(',\n  ')}\n} from 'remotion';\n`;
+    if (code.includes("from 'react';")) {
+      code = code.replace("from 'react';", `from 'react';\n${importStatement}`);
+    } else {
+      code = importStatement + code;
+    }
+    changes.push(`Injected Remotion imports (${foundKeywords.join(', ')})`);
+  } else {
+    const remotionImportMatch = code.match(/import\s*\{([^}]+)\}\s*from\s*['"]remotion['"]/);
+    if (remotionImportMatch) {
+      const existing = remotionImportMatch[1].split(',').map((s) => s.trim());
+      const missing = foundKeywords.filter((kw) => !existing.includes(kw));
+      if (missing.length > 0) {
+        const updated = [...existing, ...missing].join(', ');
+        code = code.replace(remotionImportMatch[0], `import { ${updated} } from 'remotion'`);
+        changes.push(`Added missing Remotion APIs to import: ${missing.join(', ')}`);
+      }
+    }
+  }
+
+  // 4. Ensure MotionGraphic entry point is properly exported
+  const hasNamedMotionGraphic = /export\s+(?:const|function|let|var)\s+MotionGraphic\b/.test(code);
+  const hasDefaultExport = /export\s+default\s+([A-Za-z0-9_]+)/.exec(code);
+  const hasFunctionMotionGraphic = /(?:function|const|let)\s+MotionGraphic\b/.test(code);
+
+  if (!hasNamedMotionGraphic) {
+    if (hasFunctionMotionGraphic) {
+      code = code.replace(/(?:function|const|let)\s+MotionGraphic\b/, 'export const MotionGraphic');
+      changes.push('Exported MotionGraphic component as required named export');
+    } else if (hasDefaultExport && hasDefaultExport[1]) {
+      const compName = hasDefaultExport[1];
+      code += `\n\n// [Auto-fixed: MotionFrame Composition Contract entry point]\nexport const MotionGraphic = ${compName};\n`;
+      changes.push(`Mapped default export "${compName}" to "export const MotionGraphic"`);
+    } else {
+      const anyCompMatch = code.match(/(?:const|function)\s+([A-Z][A-Za-z0-9_]*)\b/);
+      if (anyCompMatch && anyCompMatch[1]) {
+        code += `\n\n// [Auto-fixed: MotionFrame Composition Contract entry point]\nexport const MotionGraphic = ${anyCompMatch[1]};\n`;
+        changes.push(`Linked detected component "${anyCompMatch[1]}" to "export const MotionGraphic"`);
+      } else {
+        code = `import React from 'react';\nimport { AbsoluteFill, useCurrentFrame, useVideoConfig } from 'remotion';\n\nexport const MotionGraphic: React.FC = () => {\n  const frame = useCurrentFrame();\n  const { fps, width, height } = useVideoConfig();\n  return (\n    <AbsoluteFill style={{ backgroundColor: '#F5F8FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>\n      ${code}\n    </AbsoluteFill>\n  );\n};\n`;
+        changes.push('Wrapped bare code into standard MotionGraphic component');
+      }
+    }
+  }
+
+  // 5. Test compile to verify the fix
+  const validationAfter = validateMotioCode(code);
+
+  return {
+    fixedCode: code,
+    changes,
+    success: validationAfter.valid,
+  };
+}
+
+/**
  * Dynamically compiles and instantiates the MotionGraphic React component
  * in browser memory for @remotion/player.
  */

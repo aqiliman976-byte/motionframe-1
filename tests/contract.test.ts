@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cleanMotioCode, validateMotioCode, compileMotioComponent } from '../src/services/compiler';
+import { cleanMotioCode, validateMotioCode, compileMotioComponent, autoFixMotioCode } from '../src/services/compiler';
 import { STARTER_COMPOSITION } from '../src/templates/starter';
 
 describe('MotionFrame Composition Contract & Motio Compatibility', () => {
@@ -68,5 +68,20 @@ export const MotionGraphic = () => <div>Bad</div>;
     expect(error).toBeNull();
     expect(component).not.toBeNull();
     expect(typeof component).toBe('function');
+  });
+
+  it('autoFixMotioCode repairs missing exports and injects Remotion imports', () => {
+    const brokenCode = `
+const MyHeroPromo = () => {
+  const frame = useCurrentFrame();
+  return <AbsoluteFill>Frame {frame}</AbsoluteFill>;
+};
+export default MyHeroPromo;
+`;
+    const { fixedCode, success, changes } = autoFixMotioCode(brokenCode);
+    expect(success).toBe(true);
+    expect(fixedCode).toContain('export const MotionGraphic');
+    expect(fixedCode).toContain("from 'remotion'");
+    expect(changes.length).toBeGreaterThan(0);
   });
 });
