@@ -1,0 +1,23 @@
+node_modules/
+dist/
+dist-ssr/
+*.local
+.env
+.env.*
+!.env.example
+
+# Build & temp logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# Video renders & temporary workspaces
+public/renders/*.mp4
+temp-test/
+temp-render/
+
+# OS files
+.DS_Store
+Thumbs.db
